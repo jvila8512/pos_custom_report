@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="point_of_sale.sale_details_report" model="ir.actions.report">
+        <field name="print_report_name">('Reporte_Ventas_%s_%s' % ((object.name or 'session').replace(' ','_'), object.start_at.strftime('%d-%m-%Y') if object.start_at else '')).replace('/','-')</field>
+    </record>
+</odoo>
