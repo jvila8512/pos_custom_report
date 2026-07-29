@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_pos_excel_report_wizard_form" model="ir.ui.view">
+        <field name="name">pos.excel.report.wizard.form</field>
+        <field name="model">pos.excel.report.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Reporte Excel de Ventas">
+                <group string="Fechas">
+                    <field name="date_start"/>
+                    <field name="date_stop"/>
+                </group>
+                <group string="Proveedor">
+                    <field name="supplier_ids" widget="many2many_tags" placeholder="Dejar vacio para todos"/>
+                </group>
+                <field name="session_id" invisible="1"/>
+                <footer>
+                    <button name="generate_report" string="Descargar Excel" type="object" class="btn-primary"/>
+                    <button string="Cancelar" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_pos_excel_report_wizard" model="ir.actions.act_window">
+        <field name="name">Reporte Excel de Ventas</field>
+        <field name="res_model">pos.excel.report.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+</odoo>

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Extender wizard pos.details.wizard (Reporte por rango de fechas) -->
+    <record id="view_pos_details_wizard_inherit_supplier" model="ir.ui.view">
+        <field name="name">pos.details.wizard.form.supplier</field>
+        <field name="model">pos.details.wizard</field>
+        <field name="inherit_id" ref="point_of_sale.view_pos_details_wizard"/>
+        <field name="arch" type="xml">
+            <xpath expr="//group[2]" position="after">
+                <group string="Filtro por Proveedor">
+                    <field name="supplier_ids" widget="many2many_tags" placeholder="Dejar vacio para todos los proveedores"/>
+                </group>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Extender wizard pos.daily.sales.reports.wizard (Reporte por sesion) -->
+    <record id="view_pos_daily_sales_reports_wizard_inherit_supplier" model="ir.ui.view">
+        <field name="name">pos.daily.sales.reports.wizard.form.supplier</field>
+        <field name="model">pos.daily.sales.reports.wizard</field>
+        <field name="inherit_id" ref="point_of_sale.view_pos_daily_sales_reports_wizard"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='pos_session_id']" position="before">
+                <group string="Filtro por Proveedor">
+                    <field name="supplier_ids" widget="many2many_tags" placeholder="Dejar vacio para todos los proveedores"/>
+                </group>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

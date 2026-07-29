@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+<data>
+
+<template id="inherit_report_saledetails" inherit_id="point_of_sale.report_saledetails">
+
+    <!-- Reemplazar encabezado: "Daily Sales Report X/Z" → "Reporte diario de Ventas" + empresa + tipo -->
+    <xpath expr="//h2[@t-if]" position="replace">
+        <h2>Reporte diario de Ventas</h2>
+        <h3 t-esc="company.name"/>
+        <p style="font-size: 0.85em; color: #6c757d;">
+            <t t-if="state == 'closed'">Reporte de cierre - La sesión se ha cerrado</t>
+            <t t-else="">Reporte parcial - La sesión permanece abierta</t>
+        </p>
+    </xpath>
+
+    <!-- Sección de análisis de ganancias después de closing_session -->
+    <xpath expr="//t[@id='closing_session']" position="after">
+        <t t-if="user.has_group('base.group_system')">
+            <div style="page-break-before: always;">
+                <div class="profit-analysis-section" style="margin-top: 0; padding: 20px; background: #f8f9fa;">
+                    <h2 style="color: #875A7B; border-bottom: 2px solid #875A7B; padding-bottom: 10px; margin-bottom: 20px; text-align: center;">
+                        ANÁLISIS DE GANANCIAS
+                    </h2>
+
+                    <!-- Mostrar filtro de proveedor aplicado -->
+                    <t t-if="supplier_filter_names">
+                        <div style="margin-bottom: 15px; padding: 10px 15px; background: #fff3cd; border-left: 4px solid #875A7B; border-radius: 4px; font-size: 0.9em; color: #856404;">
+                            <strong>Filtro de Proveedor aplicado:</strong>
+                            <span t-esc="', '.join(supplier_filter_names)"/>
+                        </div>
+                    </t>
+
+                    <t t-if="has_profit_analysis and profit_data">
+                        <h4 style="color: #875A7B; margin-bottom: 15px;">Detalle de Ganancias por Producto</h4>
+
+                        <table class="table table-sm" style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+                            <thead>
+                                <tr style="background-color: #f8f9fa;">
+                                    <th style="padding: 10px; text-align: left; border: 1px solid #ddd; font-weight: bold;">Producto</th>
+                                    <th style="padding: 10px; text-align: center; border: 1px solid #ddd; font-weight: bold;">Cantidad</th>
+                                    <th style="padding: 10px; text-align: center; border: 1px solid #ddd; font-weight: bold;">Stock Inicial</th>
+                                    <th style="padding: 10px; text-align: center; border: 1px solid #ddd; font-weight: bold;">Stock Actual</th>
+                                    <th style="padding: 10px; text-align: right; border: 1px solid #ddd; font-weight: bold;">Costo Total</th>
+                                    <th style="padding: 10px; text-align: right; border: 1px solid #ddd; font-weight: bold;">Ventas Total</th>
+                                    <th style="padding: 10px; text-align: right; border: 1px solid #ddd; font-weight: bold;">Ganancia</th>
+                                    <th style="padding: 10px; text-align: center; border: 1px solid #ddd; font-weight: bold;">Margen %</th>
+                                    <th style="padding: 10px; text-align: center; border: 1px solid #ddd; font-weight: bold;">Part. %</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr t-foreach="profit_data.get('products', [])" t-as="product">
+                                    <td style="padding: 8px; border: 1px solid #ddd;">
+                                        <span t-esc="product.get('name', 'N/A')"/>
+                                        <span t-if="product.get('is_fifo')" style="color: #875A7B; font-weight: bold;"> *</span>
+                                    </td>
+                                    <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">
+                                        <span t-esc="int(product.get('quantity', 0))"/>
+                                    </td>
+                                    <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">
+                                        <span t-esc="int(product.get('stock_initial', 0))"/>
+                                    </td>
+                                    <td t-att-style="'padding: 8px; border: 1px solid #ddd; text-align: center; font-weight: bold; color: ' + ('#dc3545' if product.get('stock_current', 0) &lt;= 0 else '#28a745') + ';'">
+                                        <span t-esc="int(product.get('stock_current', 0))"/>
+                                    </td>
+                                    <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">
+                                        <span t-esc="currency.get('symbol', '$')"/>
+                                        <span t-esc="'%.2f' % product.get('cost_total', 0)"/>
+                                    </td>
+                                    <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">
+                                        <span t-esc="currency.get('symbol', '$')"/>
+                                        <span t-esc="'%.2f' % product.get('sales_total', 0)"/>
+                                    </td>
+                                    <td style="padding: 8px; border: 1px solid #ddd; text-align: right; font-weight: bold; vertical-align: middle;"
+                                        t-att-style="'color: ' + ('#28a745' if product.get('profit', 0) >= 0 else '#dc3545') + '; padding: 8px; border: 1px solid #ddd; text-align: right; font-weight: bold; vertical-align: middle;'">
+                                        <span t-esc="currency.get('symbol', '$')"/>
+                                        <span t-esc="'%.2f' % product.get('profit', 0)"/>
+                                    </td>
+                                    <td style="padding: 8px; border: 1px solid #ddd; text-align: center; font-weight: bold; line-height: 1.4;"
+                                        t-att-style="'color: ' + ('#28a745' if product.get('margin', 0) >= 20 else ('#ffc107' if product.get('margin', 0) >= 10 else '#dc3545')) + '; padding: 8px; border: 1px solid #ddd; text-align: center; font-weight: bold; line-height: 1.4;'">
+                                        <span t-esc="'%.1f' % product.get('margin', 0)"/>%
+                                    </td>
+                                    <td style="padding: 8px; border: 1px solid #ddd; text-align: center; font-weight: bold;"
+                                        t-att-style="'color: ' + ('#17a2b8' if product.get('profit_share', 0) >= 5 else '#6c757d') + '; padding: 8px; border: 1px solid #ddd; text-align: center; font-weight: bold;'">
+                                        <span t-esc="'%.1f' % product.get('profit_share', 0)"/>%
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <!-- RESUMEN FINANCIERO -->
+                        <table style="width: 100%; border-collapse: collapse; margin-bottom: 15px; background: white; border: 1px solid #ddd; border-radius: 8px;">
+                            <thead>
+                                <tr>
+                                    <th colspan="3" style="padding: 12px; text-align: center; background: #875A7B; color: white; border: 1px solid #875A7B;">
+                                        Resumen Financiero
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td style="padding: 12px; text-align: center; border: 1px solid #ddd; width: 33.3%;">
+                                        <strong style="display: block; margin-bottom: 5px; color: #875A7B;">Costo Total</strong>
+                                        <span style="font-size: 1.1em; font-weight: bold;">
+                                            <span t-esc="currency.get('symbol', '$')"/>
+                                            <span t-esc="'%.2f' % profit_data.get('total_cost', 0)"/>
+                                        </span>
+                                    </td>
+                                    <td style="padding: 12px; text-align: center; border: 1px solid #ddd; width: 33.3%;">
+                                        <strong style="display: block; margin-bottom: 5px; color: #875A7B;">Ventas Totales</strong>
+                                        <span style="font-size: 1.1em; font-weight: bold;">
+                                            <span t-esc="currency.get('symbol', '$')"/>
+                                            <span t-esc="'%.2f' % profit_data.get('total_sales', 0)"/>
+                                        </span>
+                                    </td>
+                                    <td style="padding: 12px; text-align: center; border: 1px solid #ddd; width: 33.3%;">
+                                        <strong style="display: block; margin-bottom: 5px; color: #875A7B;">Productos Analizados</strong>
+                                        <span style="font-size: 1.1em; font-weight: bold;">
+                                            <span t-esc="int(profit_data.get('total_products_analyzed', 0))"/>
+                                        </span>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <!-- RESULTADO FINAL -->
+                        <table style="width: 100%; border-collapse: collapse; margin-bottom: 15px; background: white; border: 1px solid #28a745; border-radius: 8px;">
+                            <thead>
+                                <tr>
+                                    <th colspan="2" style="padding: 12px; text-align: center; background: #28a745; color: white; border: 1px solid #28a745;">
+                                        Resultado Final
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td style="padding: 12px; text-align: center; border: 1px solid #ddd; width: 50%;">
+                                        <strong style="display: block; margin-bottom: 5px; color: #28a745;">Ganancia Total</strong>
+                                        <span t-att-style="'color: ' + ('#28a745' if profit_data.get('total_profit', 0) >= 0 else '#dc3545') + '; font-weight: bold; font-size: 1.2em;'">
+                                            <span t-esc="currency.get('symbol', '$')"/>
+                                            <span t-esc="'%.2f' % profit_data.get('total_profit', 0)"/>
+                                        </span>
+                                    </td>
+                                    <td style="padding: 12px; text-align: center; border: 1px solid #ddd; width: 50%;">
+                                        <strong style="display: block; margin-bottom: 5px; color: #28a745;">Margen de Ganancia</strong>
+                                        <span t-att-style="'color: ' + ('#28a745' if profit_data.get('profit_margin', 0) >= 0 else '#dc3545') + '; font-weight: bold; font-size: 1.2em;'">
+                                            <span t-esc="'%.1f' % profit_data.get('profit_margin', 0)"/>%
+                                        </span>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <!-- Mensaje si no hay productos -->
+                        <t t-if="not profit_data.get('products') or len(profit_data.get('products', [])) == 0">
+                            <div style="margin-top: 15px; padding: 10px; background: #fff3cd; border-radius: 5px; color: #856404; font-size: 0.9em;">
+                                <strong>Información:</strong>
+                                No se encontraron datos de productos para el análisis de ganancias.
+                            </div>
+                        </t>
+
+                        <!-- Información del análisis -->
+                        <div style="margin-top: 15px; padding: 8px; background: #e7f3ff; border-radius: 5px; font-size: 0.8em; color: #0c5460;">
+                            <strong> Análisis diseñado por Javier Vila Labrada</strong><br/>
+                            <small>
+                                Si desea otros datos contacte al 52046805<br/>
+                                • Cálculo: (Ventas sin IVA - Costo) = Ganancia • Margen: (Ganancia / Ventas sin IVA) × 100 • Part. %: (Ganancia producto / Ganancia total) × 100 • Costo: Precio estándar<br/>
+                                <t t-if="any(p.get('is_fifo') for p in profit_data.get('products', []))">
+                                    <span style="color: #875A7B; font-weight: bold;">*</span> Producto con costo FIFO: la ganancia refleja el costo real de cada lote consumido, que puede variar entre ventas.
+                                </t>
+                            </small>
+                        </div>
+
+                    </t>
+
+                    <!-- Mensaje si no hay análisis de ganancias -->
+                    <t t-if="not has_profit_analysis or not profit_data">
+                        <div style="padding: 15px; text-align: center; color: #6c757d;">
+                            <p>El análisis de ganancias no está disponible para este reporte.</p>
+                        </div>
+                    </t>
+
+                </div>
+            </div>
+        </t>
+    </xpath>
+
+</template>
+
+</data>
+</odoo>
