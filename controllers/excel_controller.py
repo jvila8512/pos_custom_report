@@ -106,15 +106,15 @@ class ExcelReportController(http.Controller):
                 status=500,
             )
 
-        # Generate filename
-        if session:
-            name_part = (session.name or 'session').replace(' ', '_').replace('/', '-')
-        elif ds and de:
+        # Generate filename - fechas tienen prioridad
+        if ds and de:
             name_part = '%s_al_%s' % (ds.strftime('%d-%m-%Y'), de.strftime('%d-%m-%Y'))
         elif ds:
             name_part = 'desde_%s' % ds.strftime('%d-%m-%Y')
         elif de:
             name_part = 'hasta_%s' % de.strftime('%d-%m-%Y')
+        elif session:
+            name_part = (session.name or 'session').replace(' ', '_').replace('/', '-')
         else:
             name_part = datetime.now().strftime('%d-%m-%Y')
 

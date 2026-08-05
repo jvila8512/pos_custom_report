@@ -127,27 +127,27 @@ class PosSession(models.Model):
         # Buscar ordenes
         domain = [('state', 'in', ['paid', 'invoiced', 'done'])]
 
-        if session:
+        # Las fechas tienen prioridad. Si el usuario puso el rango de fechas,
+        # se filtra SOLO por fechas (la sesion queda ignorada).
+        if date_start or date_stop:
+            if date_start:
+                dt_start = fields.Datetime.combine(fields.Datetime.from_string(str(date_start)), dt.min.time())
+                domain = AND([domain, [('date_order', '>=', fields.Datetime.to_string(dt_start))]])
+            if date_stop:
+                dt_stop = fields.Datetime.combine(fields.Datetime.from_string(str(date_stop)), dt.max.time())
+                domain = AND([domain, [('date_order', '<=', fields.Datetime.to_string(dt_stop))]])
+            session_name = 'Rango de fechas'
+            report_date = (
+                ('%s al %s' % (date_start.strftime('%d/%m/%Y'), date_stop.strftime('%d/%m/%Y')))
+                if date_start and date_stop
+                else (('Desde %s' % date_start.strftime('%d/%m/%Y')) if date_start else ('Hasta %s' % date_stop.strftime('%d/%m/%Y')))
+            )
+            currency_symbol = self.env.company.currency_id.symbol or '$'
+        elif session:
             domain = AND([domain, [('session_id', '=', session.id)]])
             report_date = session.start_at.strftime('%d/%m/%Y %H:%M') if session.start_at else ''
             session_name = session.name or ''
             currency_symbol = session.currency_id.symbol or '$'
-        elif date_start or date_stop:
-            if date_start:
-                dt_start = fields.Datetime.combine(fields.Datetime.from_string(str(date_start)), datetime.min.time())
-                domain = AND([domain, [('date_order', '>=', fields.Datetime.to_string(dt_start))]])
-            if date_stop:
-                dt_stop = fields.Datetime.combine(fields.Datetime.from_string(str(date_stop)), datetime.max.time())
-                domain = AND([domain, [('date_order', '<=', fields.Datetime.to_string(dt_stop))]])
-            report_date = ''
-            if date_start and date_stop:
-                report_date = '%s al %s' % (date_start.strftime('%d/%m/%Y'), date_stop.strftime('%d/%m/%Y'))
-            elif date_start:
-                report_date = 'Desde %s' % date_start.strftime('%d/%m/%Y')
-            elif date_stop:
-                report_date = 'Hasta %s' % date_stop.strftime('%d/%m/%Y')
-            session_name = 'Rango de fechas'
-            currency_symbol = self.env.company.currency_id.symbol or '$'
         else:
             report_date = ''
             session_name = ''
