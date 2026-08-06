@@ -131,10 +131,10 @@ class PosSession(models.Model):
         # se filtra SOLO por fechas (la sesion queda ignorada).
         if date_start or date_stop:
             if date_start:
-                dt_start = fields.Datetime.combine(fields.Datetime.from_string(str(date_start)), dt.min.time())
+                dt_start = dt.combine(date_start, dt.min.time())
                 domain = AND([domain, [('date_order', '>=', fields.Datetime.to_string(dt_start))]])
             if date_stop:
-                dt_stop = fields.Datetime.combine(fields.Datetime.from_string(str(date_stop)), dt.max.time())
+                dt_stop = dt.combine(date_stop, dt.max.time())
                 domain = AND([domain, [('date_order', '<=', fields.Datetime.to_string(dt_stop))]])
             session_name = 'Rango de fechas'
             if date_start and date_stop and date_start == date_stop:
