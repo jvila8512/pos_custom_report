@@ -137,11 +137,15 @@ class PosSession(models.Model):
                 dt_stop = fields.Datetime.combine(fields.Datetime.from_string(str(date_stop)), dt.max.time())
                 domain = AND([domain, [('date_order', '<=', fields.Datetime.to_string(dt_stop))]])
             session_name = 'Rango de fechas'
-            report_date = (
-                ('%s al %s' % (date_start.strftime('%d/%m/%Y'), date_stop.strftime('%d/%m/%Y')))
-                if date_start and date_stop
-                else (('Desde %s' % date_start.strftime('%d/%m/%Y')) if date_start else ('Hasta %s' % date_stop.strftime('%d/%m/%Y')))
-            )
+            if date_start and date_stop and date_start == date_stop:
+                # Misma fecha -> mostrar solo una
+                report_date = date_start.strftime('%d/%m/%Y')
+            else:
+                report_date = (
+                    ('%s al %s' % (date_start.strftime('%d/%m/%Y'), date_stop.strftime('%d/%m/%Y')))
+                    if date_start and date_stop
+                    else (('Desde %s' % date_start.strftime('%d/%m/%Y')) if date_start else ('Hasta %s' % date_stop.strftime('%d/%m/%Y')))
+                )
             currency_symbol = self.env.company.currency_id.symbol or '$'
         elif session:
             domain = AND([domain, [('session_id', '=', session.id)]])
