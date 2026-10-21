@@ -24,7 +24,18 @@ class SaleDetailsReport(models.AbstractModel):
             data['date_start'], data['date_stop'], configs.ids, data['session_ids'],
             supplier_ids=data.get('supplier_ids'),
         ))
+        # Quitar el prefijo [codigo interno] del nombre de producto que Odoo antepone via line['code']
+        data['products'] = self._strip_internal_codes(data.get('products', []))
+        data['refund_products'] = self._strip_internal_codes(data.get('refund_products', []))
         return data
+
+    @api.model
+    def _strip_internal_codes(self, categories):
+        """Dejar el atributo 'code' vacio para que la plantilla no muestre '[CODIGO]' antes del nombre."""
+        for category in categories:
+            for line in category.get('products', []):
+                line['code'] = False
+        return categories
 
     @api.model
     def _get_supplier_product_ids(self, supplier_ids):
