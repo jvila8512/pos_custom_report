@@ -15,8 +15,9 @@ import { _t } from "@web/core/l10n/translation";
 
 // Funcion comun de validacion de stock
 async function validateStock(pos, product, options) {
-    if (!product || (product.type !== "product" && product.type !== "consu")) {
-        return true; // servicios pasan sin validar
+    const productType = product && (product.type || product.detailed_type);
+    if (!product || productType === "service" || productType === "combo") {
+        return true; // servicios y combos pasan sin validar
     }
 
     let availableQty = product.qty_available || 0;
@@ -49,13 +50,12 @@ async function validateStock(pos, product, options) {
     }
 
     const requestedQty = (options && options.quantity) || 1;
+    const displayName = product.display_name || product.name;
 
     if (availableQty <= 0) {
         await pos.popup.add(ErrorPopup, {
             title: _t("Sin stock"),
-            body: _t('"${productName}" no tiene stock disponible.', {
-                productName: product.display_name || product.name,
-            }),
+            body: '"' + displayName + '" no tiene stock disponible.',
         });
         return false;
     }
@@ -63,14 +63,7 @@ async function validateStock(pos, product, options) {
     if (requestedQty > availableQty) {
         await pos.popup.add(ErrorPopup, {
             title: _t("Stock insuficiente"),
-            body: _t(
-                '"${productName}" solo tiene ${qty} unidades disponibles. Intento agregar ${requested}.',
-                {
-                    productName: product.display_name || product.name,
-                    qty: availableQty,
-                    requested: requestedQty,
-                }
-            ),
+            body: '"' + displayName + '" solo tiene ' + availableQty + ' unidades disponibles. Intento agregar ' + requestedQty + '.',
         });
         return false;
     }
