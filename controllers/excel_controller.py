@@ -298,6 +298,17 @@ class ExcelReportController(http.Controller):
         ws.write_blank(row, 2, summary_value_fmt)
         row += 1
 
+        payments = data.get('payments_summary', {})
+        ws.write(row, 0, "Efectivo", summary_label_fmt)
+        ws.write_number(row, 1, payments.get('cash', 0.0), summary_value_fmt)
+        ws.write_blank(row, 2, summary_value_fmt)
+        row += 1
+
+        ws.write(row, 0, "Transferencia", summary_label_fmt)
+        ws.write_number(row, 1, payments.get('transfer', 0.0), summary_value_fmt)
+        ws.write_blank(row, 2, summary_value_fmt)
+        row += 1
+
         ws.write(row, 0, "Firma:", summary_label_fmt)
         ws.merge_range(row, 1, row, 2, "_________________________", summary_sign_fmt)
         row += 2
@@ -510,6 +521,29 @@ class ExcelReportController(http.Controller):
             ws.cell(row=row, column=c).border = thin_border
         row += 1
 
+        payments = data.get('payments_summary', {})
+        cell = ws.cell(row=row, column=1, value="Efectivo")
+        cell.font = summary_font
+        cell.border = thin_border
+        ws.merge_cells(start_row=row, start_column=2, end_row=row, end_column=3)
+        cell = ws.cell(row=row, column=2, value=payments.get('cash', 0.0))
+        cell.font = summary_font; cell.alignment = right_align; cell.border = thin_border
+        cell.number_format = '#,##0.00'
+        for c in range(2, 4):
+            ws.cell(row=row, column=c).border = thin_border
+        row += 1
+
+        cell = ws.cell(row=row, column=1, value="Transferencia")
+        cell.font = summary_font
+        cell.border = thin_border
+        ws.merge_cells(start_row=row, start_column=2, end_row=row, end_column=3)
+        cell = ws.cell(row=row, column=2, value=payments.get('transfer', 0.0))
+        cell.font = summary_font; cell.alignment = right_align; cell.border = thin_border
+        cell.number_format = '#,##0.00'
+        for c in range(2, 4):
+            ws.cell(row=row, column=c).border = thin_border
+        row += 1
+
         cell = ws.cell(row=row, column=1, value="Firma:")
         cell.font = summary_font
         cell.border = thin_border
@@ -647,6 +681,15 @@ class ExcelReportController(http.Controller):
         ws.write(row, 0, "A Entregar", summary_label_style)
         # A Entregar = celda H del TOTAL
         ws.write_merge(row, 1, 2, xlwt.Formula('H%d' % (total_row + 1)), summary_value_style)
+        row += 1
+
+        payments = data.get('payments_summary', {})
+        ws.write(row, 0, "Efectivo", summary_label_style)
+        ws.write_merge(row, 1, 2, payments.get('cash', 0.0), summary_value_style)
+        row += 1
+
+        ws.write(row, 0, "Transferencia", summary_label_style)
+        ws.write_merge(row, 1, 2, payments.get('transfer', 0.0), summary_value_style)
         row += 1
 
         ws.write(row, 0, "Firma:", summary_label_style)

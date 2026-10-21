@@ -6,6 +6,17 @@ from datetime import datetime as dt
 class PosSession(models.Model):
     _inherit = 'pos.session'
 
+    def _loader_params_product_product(self):
+        """Asegurar que el frontend del POS reciba 'type' y 'qty_available'.
+        Por defecto Odoo NO los incluye, lo que hacia que la validacion de stock
+        se saltara productos (product.type quedaba undefined en el frontend)."""
+        res = super()._loader_params_product_product()
+        fields_list = res['search_params']['fields']
+        for f in ('type', 'qty_available'):
+            if f not in fields_list:
+                fields_list.append(f)
+        return res
+
     def get_profit_data(self):
         """Obtener datos de ganancias usando precio sin IVA y costo FIFO real"""
         try:
@@ -173,6 +184,12 @@ class PosSession(models.Model):
                 'qty_sold': 0,
                 'stock_current': 0,
             },
+            # Desglose de cobros (efectivo / transferencia) atribuidos al
+            # proveedor filtrado, expresados en COSTO (misma unidad que "A Entregar").
+            'payments_summary': {
+                'cash': 0.0,
+                'transfer': 0.0,
+            },
         }
 
         # Agregar nombres de proveedores filtrados
@@ -220,6 +237,47 @@ class PosSession(models.Model):
 
         # Ordenar por nombre
         data['products'].sort(key=lambda x: x['name'])
+
+        # === Desglose de cobros (efectivo / transferencia) del proveedor ===
+        # Para cada orden se atribuye al proveedor filtrado la parte de cada pago
+        # proporcional al COSTO de sus productos dentro de la orden:
+        #   monto_proveedor = costo_producto_proveedor * (monto_pago / venta_total_orden)
+        # Asi el numero queda en la misma unidad (costo) que "A Entregar".
+        cash_total = 0.0
+        transfer_total = 0.0
+
+        for order in orders:
+            order_sale_total = order.amount_total or 0.0
+            if not order_sale_total:
+                continue
+
+            # Costo de los productos del proveedor filtrado dentro de esta orden
+            supplier_cost_in_order = 0.0
+            for line in order.lines:
+                product = line.product_id
+                if not product:
+                    continue
+                if supplier_product_ids is not False and product.id not in supplier_product_ids:
+                    continue
+                supplier_cost_in_order += (product.standard_price or 0) * line.qty
+
+            if not supplier_cost_in_order:
+                continue
+
+            # Cobros de la orden
+            for payment in order.payment_ids:
+                ratio = (payment.amount or 0.0) / order_sale_total
+                supplier_share = supplier_cost_in_order * ratio
+                if payment.payment_method_id.is_cash_count:
+                    cash_total += supplier_share
+                else:
+                    # Metodos no-efectivo (id sin caja) se consideran transferencia/banco
+                    transfer_total += supplier_share
+
+        data['payments_summary'] = {
+            'cash': cash_total,
+            'transfer': transfer_total,
+        }
 
         return data
 
