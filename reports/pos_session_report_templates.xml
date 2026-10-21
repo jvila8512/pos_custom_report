@@ -64,16 +64,13 @@
                                         <span t-esc="int(product.get('stock_current', 0))"/>
                                     </td>
                                     <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">
-                                        <span t-esc="currency.get('symbol', '$')"/>
                                         <span t-esc="'%.2f' % product.get('cost_total', 0)"/>
                                     </td>
                                     <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">
-                                        <span t-esc="currency.get('symbol', '$')"/>
                                         <span t-esc="'%.2f' % product.get('sales_total', 0)"/>
                                     </td>
                                     <td style="padding: 8px; border: 1px solid #ddd; text-align: right; font-weight: bold; vertical-align: middle;"
                                         t-att-style="'color: ' + ('#28a745' if product.get('profit', 0) >= 0 else '#dc3545') + '; padding: 8px; border: 1px solid #ddd; text-align: right; font-weight: bold; vertical-align: middle;'">
-                                        <span t-esc="currency.get('symbol', '$')"/>
                                         <span t-esc="'%.2f' % product.get('profit', 0)"/>
                                     </td>
                                     <td style="padding: 8px; border: 1px solid #ddd; text-align: center; font-weight: bold; line-height: 1.4;"
