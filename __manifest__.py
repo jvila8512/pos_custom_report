@@ -1,6 +1,6 @@
 {
     'name': 'POS Custom Report',
-    'version': '17.0.1.1.1',
+    'version': '17.0.1.1.2',
     'category': 'Point of Sale',
     'summary': 'Personalizacion del reporte de cierre de sesion POS + Validación Stock + Filtro por Proveedor',
     'depends': ['point_of_sale'],
