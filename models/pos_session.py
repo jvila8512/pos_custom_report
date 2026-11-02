@@ -140,13 +140,20 @@ class PosSession(models.Model):
 
         # Las fechas tienen prioridad. Si el usuario puso el rango de fechas,
         # se filtra SOLO por fechas (la sesion queda ignorada).
+        report_start_dt = None
+        report_stop_dt = None
         if date_start or date_stop:
             if date_start:
                 dt_start = dt.combine(date_start, dt.min.time())
+                report_start_dt = dt_start
                 domain = AND([domain, [('date_order', '>=', fields.Datetime.to_string(dt_start))]])
             if date_stop:
                 dt_stop = dt.combine(date_stop, dt.max.time())
+                report_stop_dt = dt_stop
                 domain = AND([domain, [('date_order', '<=', fields.Datetime.to_string(dt_stop))]])
+            if report_start_dt is None:
+                # Solo fecha fin: el periodo cubre ese dia completo
+                report_start_dt = dt.combine(date_stop, dt.min.time())
             session_name = 'Rango de fechas'
             if date_start and date_stop and date_start == date_stop:
                 # Misma fecha -> mostrar solo una
@@ -160,10 +167,13 @@ class PosSession(models.Model):
             currency_symbol = self.env.company.currency_id.symbol or '$'
         elif session:
             domain = AND([domain, [('session_id', '=', session.id)]])
+            report_start_dt = session.start_at
+            report_stop_dt = session.stop_at or fields.Datetime.now()
             report_date = session.start_at.strftime('%d/%m/%Y %H:%M') if session.start_at else ''
             session_name = session.name or ''
             currency_symbol = session.currency_id.symbol or '$'
         else:
+            report_start_dt = dt.combine(fields.Date.context_today(self), dt.min.time())
             report_date = ''
             session_name = ''
             currency_symbol = self.env.company.currency_id.symbol or '$'
@@ -202,7 +212,7 @@ class PosSession(models.Model):
 
         # Recopilar ventas por producto
         product_sales = defaultdict(lambda: {
-            'qty': 0, 'name': '', 'standard_price': 0.0, 'stock_current': 0,
+            'qty': 0, 'name': '', 'standard_price': 0.0,
         })
 
         for order in orders:
@@ -215,17 +225,25 @@ class PosSession(models.Model):
                     product_sales[product.id]['qty'] += line.qty
                     product_sales[product.id]['name'] = product.name
                     product_sales[product.id]['standard_price'] = product.standard_price or 0
-                    product_sales[product.id]['stock_current'] = product.qty_available or 0
+
+        # Stock real a la fecha de inicio del reporte (reconstruido desde los
+        # movimientos de stock) y entradas dentro del periodo. Asi el reporte es
+        # reproducible: el mismo periodo da el mismo resultado aunque se genere
+        # dias o semanas despues de la fecha.
+        stock_start, stock_entries = self._get_stock_snapshot(
+            product_sales.keys(), report_start_dt, report_stop_dt
+        )
 
         for product_id, pdata in product_sales.items():
-            stock_current = pdata.get('stock_current', 0)
             qty_sold = pdata['qty']
-            stock_initial = stock_current + qty_sold
+            stock_initial = stock_start.get(product_id, 0.0)
+            stock_entry = stock_entries.get(product_id, 0.0)
+            stock_current = stock_initial + stock_entry - qty_sold
 
             data['products'].append({
                 'name': pdata['name'],
                 'stock_initial': stock_initial,
-                'stock_entry': 0,
+                'stock_entry': stock_entry,
                 'qty_sold': qty_sold,
                 'stock_current': stock_current,
                 'cost': pdata.get('standard_price', 0),
@@ -280,6 +298,74 @@ class PosSession(models.Model):
         }
 
         return data
+
+    @api.model
+    def _get_stock_snapshot(self, product_ids, date_start, date_stop=None):
+        """Stock real a la fecha de inicio del reporte + entradas del periodo.
+
+        El stock a una fecha se reconstruye desde los movimientos de stock:
+
+            stock_a_la_fecha = stock_actual - movimientos_internos_netos_posteriores
+
+        De esta forma el reporte es reproducible: el mismo periodo devuelve el
+        mismo resultado aunque se genere dias o semanas despues.
+
+        :param product_ids: ids de producto a consultar
+        :param date_start: datetime de inicio del periodo
+        :param date_stop: datetime de fin del periodo (opcional)
+        :return: (stock_inicial, entradas), dos dicts {product_id: cantidad}
+        """
+        product_ids = list(product_ids)
+        if not product_ids or not date_start:
+            return {}, {}
+
+        # Stock actual en ubicaciones internas
+        quant_groups = self.env['stock.quant']._read_group(
+            [('product_id', 'in', product_ids), ('location_id.usage', '=', 'internal')],
+            ['product_id'],
+            ['quantity:sum'],
+        )
+        stock_now = {product.id: qty or 0.0 for product, qty in quant_groups}
+
+        move_base = [('state', '=', 'done'), ('product_id', 'in', product_ids)]
+
+        # Movimientos internos netos posteriores a la fecha de inicio
+        incoming_after = self.env['stock.move']._read_group(
+            move_base + [('date', '>', date_start), ('location_dest_id.usage', '=', 'internal')],
+            ['product_id'],
+            ['quantity:sum'],
+        )
+        outgoing_after = self.env['stock.move']._read_group(
+            move_base + [('date', '>', date_start), ('location_id.usage', '=', 'internal')],
+            ['product_id'],
+            ['quantity:sum'],
+        )
+        net_in = {product.id: qty or 0.0 for product, qty in incoming_after}
+        net_out = {product.id: qty or 0.0 for product, qty in outgoing_after}
+
+        stock_start = {}
+        for product_id in product_ids:
+            stock_start[product_id] = (
+                stock_now.get(product_id, 0.0)
+                - net_in.get(product_id, 0.0)
+                + net_out.get(product_id, 0.0)
+            )
+
+        # Entradas (recepciones a ubicaciones internas) dentro del periodo
+        entries = {}
+        if date_stop:
+            entry_groups = self.env['stock.move']._read_group(
+                move_base + [
+                    ('date', '>', date_start),
+                    ('date', '<=', date_stop),
+                    ('location_dest_id.usage', '=', 'internal'),
+                ],
+                ['product_id'],
+                ['quantity:sum'],
+            )
+            entries = {product.id: qty or 0.0 for product, qty in entry_groups}
+
+        return stock_start, entries
 
     def action_download_sales_excel(self):
         """Abrir wizard para descargar reporte Excel con filtro de proveedor"""

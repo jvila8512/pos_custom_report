@@ -85,8 +85,15 @@ class SaleDetailsReport(models.AbstractModel):
 
         domain = [('state', 'in', ['paid', 'invoiced', 'done'])]
 
+        date_start_dt = None
+        date_stop_dt = None
         if session_ids:
             domain = AND([domain, [('session_id', 'in', session_ids)]])
+            sessions = self.env['pos.session'].browse(session_ids)
+            starts = [s.start_at for s in sessions if s.start_at]
+            stops = [s.stop_at for s in sessions if s.stop_at]
+            date_start_dt = min(starts) if starts else None
+            date_stop_dt = max(stops) if stops else None
         else:
             if date_start:
                 date_start_dt = fields.Datetime.from_string(date_start)
@@ -113,7 +120,9 @@ class SaleDetailsReport(models.AbstractModel):
         orders = self.env['pos.order'].search(domain)
 
         # Guardar supplier_product_ids para usar en profit_data
-        profit_data = self._calculate_profit_data(orders, supplier_product_ids)
+        profit_data = self._calculate_profit_data(
+            orders, supplier_product_ids, date_start_dt, date_stop_dt
+        )
 
         # Nombres de proveedores seleccionados para mostrar en el reporte
         supplier_names = []
@@ -151,18 +160,17 @@ class SaleDetailsReport(models.AbstractModel):
                 all_total += product.get('base_amount', 0)
         return {'total': all_total, 'qty': all_qty}
 
-    def _calculate_profit_data(self, orders, supplier_product_ids=False):
+    def _calculate_profit_data(self, orders, supplier_product_ids=False,
+                               date_start=None, date_stop=None):
         """Calcular datos de rentabilidad usando precio sin IVA y costo FIFO real.
-        Si supplier_product_ids es una lista, solo incluye productos de esos IDs."""
+        Si supplier_product_ids es una lista, solo incluye productos de esos IDs.
+
+        El stock inicial se reconstruye a la fecha de inicio del reporte (no el
+        stock de hoy), para que el reporte sea reproducible.
+        """
         products_profit = {}
         total_cost = 0.0
         total_sales = 0.0
-
-        # Obtener IDs de sesión para calcular stock inicial
-        session_ids = set()
-        for order in orders:
-            if order.session_id:
-                session_ids.add(order.session_id.id)
 
         for order in orders:
             for line in order.lines:
@@ -184,10 +192,6 @@ class SaleDetailsReport(models.AbstractModel):
                     profit = sales_total - cost_total
 
                     if product.id not in products_profit:
-                        # Stock actual del producto
-                        stock_current = product.qty_available or 0
-                        # Stock inicial = stock actual + cantidad vendida en las sesiones del reporte
-                        # (porque Odoo aún no descontó el stock de la sesión abierta)
                         products_profit[product.id] = {
                             'product_id': product.id,
                             'name': product.name,
@@ -196,7 +200,7 @@ class SaleDetailsReport(models.AbstractModel):
                             'sales_total': 0.0,
                             'profit': 0.0,
                             'is_fifo': product.cost_method == 'fifo',
-                            'stock_current': stock_current,
+                            'stock_current': 0.0,
                         }
 
                     products_profit[product.id]['quantity'] += quantity
@@ -207,14 +211,22 @@ class SaleDetailsReport(models.AbstractModel):
                     total_cost += cost_total
                     total_sales += sales_total
 
+        # Stock real a la fecha de inicio del reporte, reconstruido desde los
+        # movimientos de stock (ver pos.session._get_stock_snapshot).
+        stock_start, stock_entries = self.env['pos.session']._get_stock_snapshot(
+            products_profit.keys(), date_start, date_stop
+        )
+
         # Recalcular margen por producto y stock inicial
-        for product_data in products_profit.values():
+        for product_id, product_data in products_profit.items():
             if product_data['sales_total'] > 0:
                 product_data['margin'] = (product_data['profit'] / product_data['sales_total'] * 100)
             else:
                 product_data['margin'] = 0
-            # Stock inicial = stock actual + vendido en esta sesión
-            product_data['stock_initial'] = product_data['stock_current'] + product_data['quantity']
+            stock_initial = stock_start.get(product_id, 0.0)
+            stock_entry = stock_entries.get(product_id, 0.0)
+            product_data['stock_initial'] = stock_initial
+            product_data['stock_current'] = stock_initial + stock_entry - product_data['quantity']
 
         total_profit = total_sales - total_cost
         profit_margin = (total_profit / total_sales * 100) if total_sales > 0 else 0
