@@ -11,7 +11,9 @@
                     <field name="date_stop"/>
                 </group>
                 <group string="Proveedor">
-                    <field name="supplier_ids" widget="many2many_tags" placeholder="Dejar vacio para todos"/>
+                    <field name="supplier_ids" widget="many2many_tags"
+                           domain="[('supplier_rank', '>', 0)]"
+                           placeholder="Dejar vacio para todos"/>
                 </group>
                 <field name="session_id" invisible="1"/>
                 <footer>

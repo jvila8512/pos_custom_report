@@ -372,6 +372,12 @@ class PosSession(models.Model):
         self.ensure_one()
         wizard = self.env['pos.excel.report.wizard'].create({
             'session_id': self.id,
+            # Pre-cargar el periodo real de la sesion. Si las fechas se dejaran
+            # vacias el reporte usa la sesion, pero en cuanto el usuario escribe
+            # otras fechas (por ejemplo el mes en curso) las fechas tienen
+            # prioridad y el reporte sale vacio sin explicacion.
+            'date_start': self.start_at.date() if self.start_at else False,
+            'date_stop': (self.stop_at or self.start_at).date() if self.start_at else False,
         })
         return {
             'type': 'ir.actions.act_window',

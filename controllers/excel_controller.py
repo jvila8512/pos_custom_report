@@ -1,5 +1,5 @@
 import logging
-from odoo import http
+from odoo import http, fields
 from odoo.http import request, Response
 from io import BytesIO
 from datetime import datetime
@@ -83,6 +83,16 @@ class ExcelReportController(http.Controller):
             supplier_ids=supplier_id_list,
         )
 
+        # Un reporte vacio sin explicacion es la peor experiencia posible:
+        # el usuario no sabe si fallo el filtro o no hay datos. Se responde con
+        # un mensaje claro y el rango real de ventas disponible.
+        if not data.get('products'):
+            return Response(
+                self._empty_report_message(data),
+                status=400,
+                content_type='text/plain; charset=utf-8',
+            )
+
         excel_lib, lib_name = _try_import_excel_lib()
         if not excel_lib:
             _logger.error("No Excel library available (openpyxl, xlsxwriter, xlwt)")
@@ -138,6 +148,38 @@ class ExcelReportController(http.Controller):
             ],
             direct_passthrough=True,
         )
+
+    def _empty_report_message(self, data, env=None):
+        """Mensaje explicativo cuando el reporte no tiene datos."""
+        env = env or request.env
+        period = data.get('report_date') or 'el periodo seleccionado'
+        suppliers = data.get('supplier_filter_names') or []
+        supplier_txt = ', '.join(suppliers) if suppliers else 'todos los proveedores'
+
+        # Rango real de ventas disponibles en la base
+        domain = [('state', 'in', ['paid', 'invoiced', 'done'])]
+        pos_order = env['pos.order']
+        first = pos_order.search(domain, order='date_order asc', limit=1)
+        last = pos_order.search(domain, order='date_order desc', limit=1)
+        if first and last:
+            available = 'las ventas disponibles van del %s al %s' % (
+                fields.Datetime.to_string(first.date_order)[:10],
+                fields.Datetime.to_string(last.date_order)[:10],
+            )
+        else:
+            available = 'no hay ventas cargadas en esta base de datos'
+
+        return (
+            'No hay datos para el reporte.\n\n'
+            'Periodo: %s\n'
+            'Proveedor: %s\n\n'
+            'Revisa lo siguiente:\n'
+            '- Las fechas: %s.\n'
+            '- El proveedor: el filtro se aplica a los proveedores registrados en '
+            'los productos. Si dejaste el campo vacio se incluyen todos.\n'
+            '- Las fechas tienen prioridad sobre la sesion: si escribis un rango '
+            'que no incluye las ventas, el reporte sale vacio.\n'
+        ) % (period, supplier_txt, available)
 
     # ============================================================
     # XlsxWriter generator (preferred — ships with Odoo 17)
